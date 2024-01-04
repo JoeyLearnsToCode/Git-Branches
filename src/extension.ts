@@ -2,16 +2,30 @@ import * as vscode from 'vscode';
 import * as child_process from 'child_process';
 
 export function activate(context: vscode.ExtensionContext) {
-	// 获取当前打开的工作空间的根目录路径
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (!workspaceFolders) {
-		throw new Error('No workspace is open.');
-	}
-	const repoPath = workspaceFolders[0].uri.fsPath;
-
 	let disposable = vscode.commands.registerCommand('git-branches.all-branches', async () => {
 		try {
-			await showAllBranches(repoPath);
+			// 获取仓库根目录。如果没有打开工作区，报错结束。如果工作区包含多个文件夹，尝试根据当前打开的编辑器来决定仓库根目录。
+			// 如果没有找到，就使用工作区所有文件夹中第一个。
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				throw new Error('No workspace is open.');
+			}
+			let repoFolder: vscode.WorkspaceFolder | undefined;
+			const editor = vscode.window.activeTextEditor;
+			if (editor) {
+				repoFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+			}
+			if (!repoFolder) {
+				const notebook = vscode.window.activeNotebookEditor;
+				if (notebook) {
+					repoFolder = vscode.workspace.getWorkspaceFolder(notebook.notebook.uri);
+				}
+			}
+			if (!repoFolder) {
+				repoFolder = workspaceFolders[0];
+			}
+
+			await showAllBranches(repoFolder.uri.fsPath);
 		} catch (error) {
 			vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : error}`);
 		}
