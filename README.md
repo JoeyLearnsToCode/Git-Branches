@@ -5,9 +5,19 @@
 Provide a more convenient view of branch operations.
 This plugin defines a command `git-branches.all-branches` that can be used to list all branches in the repository, and then several most useful operation on them.
 
+Available operations for non-current branches include:
+- `checkout`
+- `compare` (requires GitLens or Gitless extension, or it won't show up)
+- `merge`
+- `delete` (there is no confirm, so be careful!)
+
+Available operations for local branches include:
+- `update`
+- `push`
+
 ## Usage
 
-You can use it by typing `git-branches.all-branches` or `All Branches` in the command line.
+You can use it by typing `git-branches.all-branches` or `All Branches` in the command palette.
 Or you can bind it to a keyboard shortcut, which I suggest.
 
 ## License

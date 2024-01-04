@@ -11,51 +11,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let disposable = vscode.commands.registerCommand('git-branches.all-branches', async () => {
 		try {
-			// 获取Git分支列表
-			const branches = await getGitBranches(repoPath);
-			const currentBranch = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
-			const items = branches.map(branch => ({
-				...branch,
-				label: branch.fullName,
-				description: branch.fullName === currentBranch ? `✓` : undefined
-			} as (vscode.QuickPickItem & Branch)));
-
-			// 显示分支列表
-			const selectedBranchItem = await vscode.window.showQuickPick(items, {
-				placeHolder: 'Select a git branch to operate on'
-			});
-			const selectedBranch = selectedBranchItem?.label;
-			if (selectedBranch) {
-				let actions: string[] = [];
-				if (selectedBranch != currentBranch) {
-					actions.push('checkout');
-					if (checkIfGitlensInstalled()) {
-						actions.push('compare');
-					}
-					actions.push('merge');
-				}
-				if (!selectedBranchItem.isRemote) {
-					// 如果分支不是远程分支，允许 update 和 push
-					actions.push('update', 'push');
-				}
-				if (selectedBranch != currentBranch) {
-					actions.push('delete');
-				}
-				const selectedAction = await vscode.window.showQuickPick(actions, {
-					placeHolder: 'Choose an action to perform on the branch'
-				});
-
-				// 执行选择的操作
-				if (selectedAction) {
-					await performGitAction(repoPath, currentBranch, selectedBranchItem as Branch, selectedAction, branches);
-				}
-			}
+			await showAllBranches(repoPath);
 		} catch (error) {
-			if (error instanceof Error) {
-				vscode.window.showErrorMessage(`Error: ${error.message}`);
-			} else {
-				vscode.window.showErrorMessage(`An unknown error occurred.`);
-			}
+			vscode.window.showErrorMessage(`Error: ${error instanceof Error ? error.message : error}`);
 		}
 	});
 
@@ -68,27 +26,111 @@ interface Branch {
 	isRemote: boolean;
 	remote?: string;
 }
+async function showAllBranches(repoPath: string) {
+	const branches = await getGitBranches(repoPath);
+	const currentBranch = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: repoPath });
+	const items = branches.map(branch => ({
+		...branch,
+		label: branch.fullName,
+		description: branch.fullName === currentBranch ? '✓' : undefined,
+	} as (vscode.QuickPickItem & Branch)));
+
+	// 排序：当前分支在最前面，本地分支和远程分支分隔开
+	items.sort((a, b) => {
+		if (a.fullName === currentBranch) {
+			return -1;
+		} else if (b.fullName === currentBranch) {
+			return 1;
+		} else if (a.isRemote) {
+			return 1;
+		} else if (b.isRemote) {
+			return -1;
+		} else {
+			return a.fullName.localeCompare(b.fullName);
+		}
+	});
+	items.splice(0, 0, {
+		label: 'Local Branches',
+		kind: vscode.QuickPickItemKind.Separator,
+		shortName: '',
+		fullName: '',
+		isRemote: false
+	});
+	let indexFirstRemote = items.findIndex(b => b.isRemote);
+	if (indexFirstRemote !== -1) {
+		items.splice(indexFirstRemote, 0, {
+			label: 'Remote Branches',
+			kind: vscode.QuickPickItemKind.Separator,
+			shortName: '',
+			fullName: '',
+			isRemote: false
+		})
+	}
+
+	// 显示分支列表
+	const selectedBranchItem = await vscode.window.showQuickPick(items, {
+		placeHolder: 'Select a git branch to operate on'
+	});
+	const selectedBranch = selectedBranchItem?.label;
+	if (selectedBranch) {
+		let actions: string[] = [];
+		if (selectedBranch != currentBranch) {
+			actions.push('checkout');
+			if (checkIfGitlensInstalled()) {
+				actions.push('compare');
+			}
+			actions.push('merge');
+		}
+		if (!selectedBranchItem.isRemote) {
+			// 如果分支不是远程分支，允许 update 和 push
+			actions.push('update', 'push');
+		}
+		if (selectedBranch != currentBranch) {
+			actions.push('delete');
+		}
+		const selectedAction = await vscode.window.showQuickPick(actions, {
+			placeHolder: 'Choose an action to perform on the branch'
+		});
+
+		// 执行选择的操作
+		if (selectedAction) {
+			await performGitAction(repoPath, currentBranch, selectedBranchItem as Branch, selectedAction, branches);
+		}
+	}
+}
+
 async function getGitBranches(repoPath: string): Promise<Branch[]> {
 	return new Promise<Branch[]>(async (resolve, reject) => {
 		// 在根目录下执行git命令
 		const gitCommand = 'git branch --list --all';
-		const branches = (await execPromise(gitCommand, { cwd: repoPath }))
-			.split('\n').filter(b => b).map(b => b.trim().replace('* ', ''))
-			.filter(b => !b.startsWith('remotes/origin/HEAD'))
-			.map(function (b) {
-				const match = b.match(/^remotes\/([^\/]+)\/(.+)$/);
-				let isRemote = false;
-				if (match) {
-					isRemote = true;
+		execPromise(gitCommand, { cwd: repoPath })
+			.then((out) => {
+				if (!out) {
+					reject(new Error('No branches found.'));
 				}
-				return {
-					shortName: isRemote ? (match as RegExpMatchArray)[2] : b,
-					fullName: b,
-					isRemote: isRemote,
-					remote: isRemote ? (match as RegExpMatchArray)[1] : undefined,
-				} as Branch;
-			})
-		resolve(branches);
+				const branches = (out as string).split('\n').filter(b => b).map(b => b.trim().replace('* ', ''))
+					.filter(b => !b.startsWith('remotes/origin/HEAD'))
+					.filter(b => !b.includes('HEAD detached'))
+					.map(function (b) {
+						const match = b.match(/^remotes\/([^\/]+)\/(.+)$/);
+						let isRemote = false;
+						if (match) {
+							isRemote = true;
+						}
+						return {
+							shortName: isRemote ? (match as RegExpMatchArray)[2] : b,
+							fullName: b,
+							isRemote: isRemote,
+							remote: isRemote ? (match as RegExpMatchArray)[1] : undefined,
+						} as Branch;
+					});
+				if (branches.length === 0) {
+					reject(new Error('No branches found.'));
+				}
+				resolve(branches);
+			}, (e) => {
+				reject(e);
+			});
 	});
 }
 
@@ -162,10 +204,13 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 					})
 					return;
 				}
-				child_process.exec(gitCommand, { cwd: repoPath }, (error, stdout, stderr) => {
+				child_process.exec(gitCommand, { cwd: repoPath, timeout: 10 * 1000 }, (error, stdout, stderr) => {
 					if (error) {
-						vscode.window.showErrorMessage(`Git ${action} failed: ${stderr}`);
-						reject(error);
+						if ('signal' in error && error.signal === 'SIGTERM') {
+							reject(new Error(`Git ${action} timed out`, error));
+						} else {
+							reject(new Error(`Git ${action} failed: ${stderr ? stderr : error}`, error));
+						}
 					} else {
 						vscode.window.showInformationMessage(`Git ${action} successful${stdout ? ': ' + stdout : '.'}`);
 						resolve();
@@ -178,21 +223,21 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 
 async function getRemoteBranch(repoPath: string, localBranch: Branch): Promise<string[]> {
 	return new Promise<string[]>((resolve, reject) => {
-		child_process.exec(`git for-each-ref --format=%(upstream) refs/heads/${localBranch.fullName}`, { cwd: repoPath }, (err, stdout, stderr) => {
-			if (err) {
-				vscode.window.showErrorMessage('Error: ' + stderr);
-				return;
-			}
-
-			// 输出跟踪的远程分支
-			const upstream = stdout.trim();
-			const match = upstream.match(/^refs\/remotes\/([^\/]+)\/(.+)$/);
-			if (match) {
-				resolve([match[1], match[2]]);
-			} else {
-				reject(new Error('No remote branch found for ' + localBranch.fullName));
-			}
-		});
+		execPromise(`git for-each-ref --format=%(upstream) refs/heads/${localBranch.fullName}`, { cwd: repoPath })
+			.then((out) => {
+				if (!out) {
+					reject(new Error('No remote branch found for ' + localBranch.fullName));
+				}
+				const upstream = (out as string).trim();
+				const match = upstream.match(/^refs\/remotes\/([^\/]+)\/(.+)$/);
+				if (match) {
+					resolve([match[1], match[2]]);
+				} else {
+					reject(new Error('No remote branch found for ' + localBranch.fullName));
+				}
+			}, (e) => {
+				reject(e);
+			});
 	});
 }
 
@@ -221,11 +266,11 @@ async function checkoutBranchCommand(repoPath: string, selectedBranch: Branch, b
 	}
 }
 
-function execPromise(command: string, options: child_process.ExecOptions): Promise<string> {
+async function execPromise(command: string, options: child_process.ExecOptions): Promise<string> {
 	return new Promise((resolve, reject) => {
 		child_process.exec(command, options, (error, stdout, stderr) => {
 			if (error) {
-				reject(new Error(stderr));
+				reject(new Error(stderr, error));
 			} else {
 				resolve(stdout.trim());
 			}
