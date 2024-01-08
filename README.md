@@ -20,6 +20,12 @@ Available operations for local branches include:
 You can use it by typing `git-branches.all-branches` or `All Branches` in the command palette.
 Or you can bind it to a keyboard shortcut, which I suggest.
 
+## Changelog
+
+### 1.0.3
+
+- When push a local branch whose upstream is set to a different name remote branch, it will be pushed to a new remote branch with same name, and its upstream will be set to the new remote branch.
+
 ## License
 
 Feel free to do anything with this plugin.

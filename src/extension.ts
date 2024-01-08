@@ -188,7 +188,11 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 			break;
 		case 'push':
 			[remote, remoteBranch] = await getRemoteBranch(repoPath, selectedBranch);
-			gitCommand = `git push ${remote} ${selectedBranch.fullName}:${remoteBranch}`;
+			if (remoteBranch !== selectedBranch.fullName) {
+				gitCommand = `git push --set-upstream ${remote} ${selectedBranch.fullName}:${selectedBranch.fullName}`;
+			} else {
+				gitCommand = `git push ${remote} ${selectedBranch.fullName}:${remoteBranch}`;
+			}
 			break;
 		case 'delete':
 			if (selectedBranch.isRemote) {
