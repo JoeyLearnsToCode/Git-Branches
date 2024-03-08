@@ -280,7 +280,9 @@ async function checkoutBranchCommand(repoPath: string, selectedBranch: Branch, b
 		return `git checkout ${inputLocalBranchName}`;
 	} else {
 		// 如果本地分支不存在，创建并切换到该分支
-		return `git checkout -b ${inputLocalBranchName} ${selectedBranch.fullName}`;
+		// 如果输入的本地分支名称和远程分支名称相同，则让本地分支跟踪该远程分支；否则不跟踪。
+		const trackOpt = defaultLocalBranchName === inputLocalBranchName ? "--track" : "--no-track";
+		return `git checkout -b ${inputLocalBranchName} ${trackOpt} ${selectedBranch.fullName}`;
 	}
 }
 

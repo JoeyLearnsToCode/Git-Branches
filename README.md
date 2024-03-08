@@ -26,6 +26,10 @@ Or you can bind it to a keyboard shortcut, which I suggest.
 
 - When push a local branch whose upstream is set to a different name remote branch, it will be pushed to a new remote branch with same name, and its upstream will be set to the new remote branch.
 
+### 1.0.4
+
+- Make checkout action on remote branch more reasonable
+
 ## License
 
 Feel free to do anything with this plugin.
