@@ -113,6 +113,25 @@ async function showAllBranches(repoPath: string) {
 	}
 }
 
+
+
+async function getRemotes(repoPath: string): Promise<string[]> {
+	return new Promise<string[]>(async (resolve, reject) => {
+		// 在根目录下执行git命令
+		const gitCommand = 'git remote';
+		execPromise(gitCommand, { cwd: repoPath })
+			.then((out) => {
+				if (!out) {
+					resolve([]);
+				}
+				const remotes = (out as string).trim().split('\n');
+				resolve(remotes);
+			}, (e) => {
+				reject(e);
+			});
+	});
+}
+
 async function getGitBranches(repoPath: string): Promise<Branch[]> {
 	return new Promise<Branch[]>(async (resolve, reject) => {
 		// 在根目录下执行git命令
@@ -163,7 +182,6 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 	let gitCommand = '';
 	let args: any[] = [];
 
-	let remote, remoteBranch;
 	switch (action) {
 		case 'checkout':
 			gitCommand = await checkoutBranchCommand(repoPath, selectedBranch, branches);
@@ -182,17 +200,38 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 			if (selectedBranch.fullName === currentBranch) {
 				gitCommand = `git pull`;
 			} else {
-				[remote, remoteBranch] = await getRemoteBranch(repoPath, selectedBranch);
+				let [remote, remoteBranch] = await getRemoteBranch(repoPath, selectedBranch);
 				gitCommand = `git fetch ${remote} ${remoteBranch}:${selectedBranch.fullName}`;
 			}
 			break;
 		case 'push':
-			[remote, remoteBranch] = await getRemoteBranch(repoPath, selectedBranch);
-			if (remoteBranch !== selectedBranch.fullName) {
-				gitCommand = `git push --set-upstream ${remote} ${selectedBranch.fullName}:${selectedBranch.fullName}`;
-			} else {
-				gitCommand = `git push ${remote} ${selectedBranch.fullName}:${remoteBranch}`;
-			}
+			gitCommand = await getRemoteBranch(repoPath, selectedBranch).then(async ([remote, remoteBranch]) => {
+				// 当前分支有追踪的远程分支，推送至该分支
+				return `git push ${remote} ${selectedBranch.fullName}:${remoteBranch}`;
+			}, async (e) => {
+				// 当前分支没有追踪的远程分支，提示用户选择 remote，推送至该 remote 的同名分支，并追踪之
+				if (e instanceof Error && e.message.includes('No remote branch found')) {
+					return await getRemotes(repoPath).then((remotes) => {
+						if (remotes.length === 0) {
+							throw new Error('No remote exists, can\'t push');
+						}
+						let remote;
+						if (remotes.length === 1) {
+							remote = remotes[0];
+						} else {
+							vscode.window.showQuickPick(remotes, { placeHolder: 'Choose a remote to push to' }).then((chosenRemote) => {
+								remote = chosenRemote;
+							});
+						}
+						if (!remote) {
+							return '';
+						}
+						return `git push --set-upstream ${remote} ${selectedBranch.fullName}:${selectedBranch.fullName}`;
+					});
+				} else {
+					throw e;
+				}
+			})
 			break;
 		case 'delete':
 			if (selectedBranch.isRemote) {
@@ -230,7 +269,7 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 							reject(new Error(`Git ${action} failed: ${stderr ? stderr : error}`, error));
 						}
 					} else {
-						vscode.window.showInformationMessage(`Git ${action} successful${stdout ? ': ' + stdout : '.'}`);
+						vscode.window.showInformationMessage(`Git ${action} succeded${stdout ? ': ' + stdout : '.'}`);
 						resolve();
 					}
 				});

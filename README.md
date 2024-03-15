@@ -30,6 +30,10 @@ Or you can bind it to a keyboard shortcut, which I suggest.
 
 - Make checkout action on remote branch more reasonable
 
+### 1.0.5
+
+- Make push action more reasonable
+
 ## License
 
 Feel free to do anything with this plugin.
