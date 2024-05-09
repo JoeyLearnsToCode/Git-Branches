@@ -34,6 +34,10 @@ Or you can bind it to a keyboard shortcut, which I suggest.
 
 - Make push action more reasonable
 
+### 1.0.6
+
+- Bugfix: fixed a bug when delete remote branch with `/` in its name.
+
 ## License
 
 Feel free to do anything with this plugin.

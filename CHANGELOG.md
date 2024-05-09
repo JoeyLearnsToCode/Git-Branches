@@ -15,3 +15,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### 1.0.5
 
 - Make push action more reasonable
+
+### 1.0.6
+
+- Bugfix: fixed a bug when delete remote branch with `/` in its name.

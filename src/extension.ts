@@ -236,7 +236,8 @@ async function performGitAction(repoPath: string, currentBranch: string, selecte
 		case 'delete':
 			if (selectedBranch.isRemote) {
 				let remoteBranch = selectedBranch.fullName.replace('remotes/', '');
-				gitCommand = `git push --delete ${remoteBranch.split('/')[0]} ${remoteBranch.split('/')[1]}`;
+				const upstream = remoteBranch.split('/');
+				gitCommand = `git push --delete ${upstream[0]} ${upstream.slice(1).join('/') }`;
 			} else {
 				gitCommand = `git branch -D ${selectedBranch.fullName}`;
 			}
